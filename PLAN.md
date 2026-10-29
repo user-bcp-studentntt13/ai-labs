@@ -106,3 +106,18 @@ Las pruebas actuales usan Vitest con entorno `node` (`web/vitest.config.ts`), po
 Las referencias anteriores a que `docs/ENDPOINTS.md` no existía y a no crear todavía `docs/TESTING.md` describen el estado del plan antes de esos entregables; ambos documentos existen ahora para web.
 
 La cobertura global incluye archivos no modificados sin cobertura; los módulos productivos modificados superan 85% de líneas. No se ejecutaron solicitudes contra los servicios ni una prueba de navegador/DOM. La sesión `sessionStorage` sigue accesible a JavaScript y termina al cerrar la pestaña.
+
+## Registro de ejecuciones — auth
+
+Referencia: Issue #24 (HU-01) y cambio OpenSpec `auth-signed-token-claims`. No hay IDs `H-AUTH-NN` asignados en los documentos generales; se usa la referencia del Issue.
+
+| ejecución | IDs | comando | resultado |
+|---|---|---|---|
+| Baseline de caracterización | Issue #24 / HU-01 | `python tools/lab.py test auth` (cwd raíz) | 9/9 pruebas pasaron antes de cambiar la emisión de tokens. |
+| Emisión JWT y claims | Issue #24 / HU-01 | `python tools/lab.py test auth` (cwd raíz) | 23/23 pruebas pasaron, BUILD SUCCESS. Incluye claims verificados con jose4j, `exp > iat`, `expiresIn` coherente con la vida del token (3600 s), token expirado rechazado, `client` inválido rechazado y prueba de logs sin token/secreto/password. |
+| Cobertura | Issue #24 / HU-01 | `mvn verify` (cwd `auth/`) con JaCoCo | `AuthResource` 30/35 líneas (85.7%); agregado de clases modificadas 52/57 (~91%). Reporte en `auth/target/site/jacoco/`. |
+| Producción sin secreto | Issue #24 / HU-01 | `java -Dquarkus.profile=prod -jar auth\target\quarkus-app\quarkus-run.jar` sin `AUTH_TOKEN_SECRET` (cwd `auth/`) | Exit 1; `SRCFG00011` al expandir `AUTH_TOKEN_SECRET`. El servicio no arranca ni emite tokens. |
+| Producción con secreto ficticio | Issue #24 / HU-01 | Mismo jar con `AUTH_TOKEN_SECRET` ficticio de 32+ bytes y `POST /auth/login` | Token con 3 segmentos (JWS); claims `sub`, `client`, `iat`, `exp` (exp − iat = 3600); `expiresIn` = 3600; `client` en blanco → HTTP 400. |
+| Incidencia de empaquetado | Issue #24 / HU-01 | `mvn package` (cwd `auth/`) | El primer jar de producción era obsoleto: `quarkus-app/` no se regeneraba porque `quarkus:build` no estaba enlazado al ciclo de vida. Se reconstruyó con `mvn quarkus:build` explícito y se verificó que el jar contiene `TokenIssuer` y no `LegacyTokenUtil`. |
+
+**Bloqueo de despliegue:** `api/app/main.py` decodifica el Bearer como Base64 y separa por `|`; no acepta los JWT emitidos. No desplegar la emisión JWT hasta que `api/` acepte el nuevo formato y rechace tokens expirados mediante un cambio aprobado en ese componente. Fuera del alcance de este Issue.

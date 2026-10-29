@@ -2,6 +2,8 @@ name: ai-labs
 services:
   auth:
     build: ./auth
+    environment:
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET}
     ports:
       - "127.0.0.1:8080:8080"
   api:
